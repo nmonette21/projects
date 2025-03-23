@@ -1,0 +1,125 @@
+##Beginner neural network based on on apple stock data
+##Assumptions will be 70% of data will be used for training, 20% validation and 10% test
+
+import pandas as pd
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from sklearn.model_selection import train_test_split
+from torch.utils.data import TensorDataset, DataLoader
+
+##Loading our data in
+aapl = pd.read_csv("data/AAPL.csv")
+num_rows= len(aapl)
+
+##Grabing features & target
+features = aapl[['Open', 'High', 'Low', 'Volume']]
+target = aapl['Close']
+
+##Converting to an array then to tensors to work with PyTorch
+features_array= features.to_numpy()
+target_array= target.to_numpy()
+
+##Splitting up our data in testing and validation
+X_train_temp, X_temp, y_train_temp, y_temp= train_test_split(features_array, target_array, test_size=.15, random_state=42)
+
+##Taking our validation data and getting validation & testing data
+X_val, X_test, y_val, y_test= train_test_split(X_temp, y_temp, test_size=.5, random_state=42)
+
+
+#Define tensors
+X_tensor = torch.tensor(features_array, dtype= torch.float32)
+y_tensor = torch.tensor(target_array, dtype= torch.float32)
+dataset = TensorDataset(X_tensor, y_tensor)
+
+X_tensor_train = torch.tensor(X_train_temp, dtype= torch.float32)
+y_tensor_train = torch.tensor(y_train_temp, dtype= torch.float32)
+X_tensor_val = torch.tensor(X_val, dtype= torch.float32)
+y_tensor_val = torch.tensor(y_val, dtype= torch.float32)
+X_tensor_test = torch.tensor(X_test, dtype= torch.float32)
+y_tensor_test = torch.tensor(y_test, dtype= torch.float32)
+
+#Create datasets
+dataset_train= TensorDataset(X_tensor_train, y_tensor_train)
+dataset_val= TensorDataset(X_tensor_val, y_tensor_val)
+dataset_test= TensorDataset(X_tensor_test, y_tensor_test)
+
+#Creating a dataloader to load this data in batches
+dataloader_train = DataLoader(dataset_train, batch_size=100, shuffle= False)
+dataloader_val = DataLoader(dataset_val, batch_size=100, shuffle= False)
+dataloader_test = DataLoader(dataset_test, batch_size=100, shuffle= False)
+
+
+#Define our model
+model = nn.Sequential(
+                        nn.Linear(4, 16),
+                        nn.ReLU(),
+                        nn.Linear(16, 1)
+                    )
+
+#Calculate the loss function to see how did
+criterion= nn.MSELoss()
+
+#Optimize to reduce the loss function
+optimizer =optim.SGD(model.parameters(), lr=.000000000000001, weight_decay = .0000000001)  
+#Tiny learning rate as my beginner model is producing massive gradients.  Going to update this once I get more deep learning knowledge
+
+#Start the training loop
+num_epochs= 5
+
+for epoch in range(num_epochs):
+    epoch_loss= 0.0
+    model.train()
+    for batch in dataloader_train:
+        features_batch, target_batch = batch
+        
+        #Set the gradients to 0
+        optimizer.zero_grad()
+        
+        #Run a forward pass
+        output = model(features_batch)
+        
+        #Calculate MSE
+        loss = criterion(output, target_batch)
+        #print(f'Before update - Loss:{loss.item(): .4f}')
+        loss.backward()
+        
+        #Update Parameters
+        optimizer.step()
+        
+        #Accumulate the loss for each step
+        epoch_loss+=loss.item()
+    #Print the loss for each epoch (all 100)
+    #print(f'Epoch [{epoch+1}/{num_epochs}], Average Loss: {epoch_loss/len(dataloader):.4f}')
+    
+#Put model into evaluation model
+model.eval()
+val_loss= 0.0
+with torch.no_grad():  #Disable gradients
+    for batch in dataloader_val:
+        features_batch, target_batch = batch
+        #run forward pass
+        outputs = model(features_batch)
+        #Calulate the loss
+        criterion(outputs, target_batch)
+        val_loss += loss.item()
+#Average Val loss
+avg_val_loss= val_loss / len(dataloader_val)
+print(f'Test loss is {avg_val_loss:.4f}')
+        
+#Put the model into test mode now
+model.eval()
+test_loss=0.0
+with torch.no_grad() #Disable gradients again
+for batch in dataloader_test:
+    batch_feature, batch_target=batch
+    #foward pass
+    outputs = model(features_batch)
+    #Calculate the loss
+    criterion(outputs, target_batch)
+    test_loss += loss.item()
+    
+#Average test loss
+avg_test_loss= test_loss / len(dataloader_test)
+print(f'Test loss is {avg_test_loss:.4f}')
+    
