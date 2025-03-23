@@ -1,0 +1,53 @@
+# Import Required Packages
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+
+#Loading and examining the dataset
+penguins_df = pd.read_csv("penguins.csv")
+penguins_df.head()
+
+#Changing the sex column to be binary (get dummies method)
+penguins_df_dummies = pd.get_dummies(penguins_df['sex'], drop_first= True)
+penguins_df_wo_sex = penguins_df.drop('sex', axis=1)
+penguins_df_combined= pd.concat([penguins_df_wo_sex,penguins_df_dummies], axis =1 )
+print(penguins_df_combined)
+#Standardize the data before clustering
+scaler= StandardScaler()
+penguins_scaled = scaler.fit_transform(penguins_df_combined)
+#penguins_scaled= pd.DataFrame(penguins_scaled, columns=numeric_columns.columns)
+
+#Testing how many clusters could be good
+ks=range(1,11)
+inertia_results=[]
+for i in ks:
+    model= KMeans(n_clusters=i)
+    model.fit(penguins_scaled)
+    inertia_results.append(model.inertia_)
+
+plt.plot(ks, inertia_results, '-o')
+plt.xlabel=('number of clusters, k')
+plt.ylabel=('inertia')
+plt.xticks(ks)
+#plt.show()
+
+
+##Running a K-means with 2 clusters
+model= KMeans(n_clusters=2, random_state=42)
+model.fit(penguins_scaled)
+labels= model.predict(penguins_scaled)
+
+#plt.scatter(penguins_scaled['culmen_length_mm'],penguins_scaled['body_mass_g'],c=labels)
+
+
+##Creating our final dataframe with the cluster labels
+labels_df= pd.DataFrame(labels, columns=['Cluster'])
+penguins_scaled_df= pd.DataFrame(penguins_scaled)
+penguin_df_final= pd.concat([labels_df, penguins_df], axis=1)
+
+stat_penguins=penguin_df_final.groupby('Cluster')[['culmen_length_mm', 'culmen_depth_mm', 'flipper_length_mm', 'body_mass_g']].mean()
+
+
+
+
