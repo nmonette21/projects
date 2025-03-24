@@ -1,0 +1,78 @@
+##Get Credit Card Information into env
+import pandas as pd
+import numpy as np
+file_path= 'C:\\Users\\nick.monette\\Desktop\\AI Upskilling\\Datasets\\creditcard.csv'
+cc_df=pd.read_csv(file_path)
+#import all packages we might use
+from sklearn.model_selection import train_test_split, cross_val_score, KFold, GridSearchCV, accuracy_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, roc_auc_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+
+#@EDA on to see if we have any missing values
+#print(cc_df.isna().sum().sort_values)
+
+##Pre-processing data 
+X= cc_df.drop('Class', axis=1)
+y=cc_df['Class']
+
+
+##Splitting test and training data
+X_train, X_test, y_train, y_test= train_test_split(X, y, test_size=.2, stratify=y, random_state=42)
+
+##Scale our data (important for KNN)
+scaler=StandardScaler()
+X_train_scaled= scaler.fit_transform(X_train)
+X_test_scaled= scaler.transform(X_test)
+
+##Trying out Nearest Neighbors
+knn= KNeighborsClassifier(n_neighbors=10)
+knn.fit(X_train_scaled, y_train)
+print("Accuracy score of KNN with 10 neighbors:", knn.score(X_test_scaled, y_test))
+
+##Goal of the loop was to determine what might be the ebst input of KNN, but not enough GPUs to compute this. 
+##Let's see if we over/underfit
+#train_accuracies=[]
+#test_accuracies=[]
+#neighbors= np.arange(1,51)
+##Loop through the data and give me the best nearest neighbors score
+#for neighbor in neighbors:
+    #knn = KNeighborsClassifier(n_neighbors=neighbor)
+    #knn.fit(X_train, y_train) 
+    #train_accuracies.append(knn.score(X_train, y_train))
+    #test_accuracies.append(knn.score(X_test, y_test))
+#print(train_accuracies)
+#print(test_accuracies)
+
+##Cross Validation to see what might be the optimal KNN
+##Cross Validation is used to evaluate training data
+kf = KFold(n_splits=8, shuffle=True, random_state=21)
+cv_results = cross_val_score(knn, X_train_scaled, y_train, cv=kf)
+print(np.mean(cv_results))
+
+
+##Grid Search to find the optimal KNN
+steps=[('scaler', StandardScaler()),
+        ('knn', KNeighborsClassifier() )
+      ]
+pipeline= Pipeline(steps)
+params = {'knn__n_neighbors': [3, 6, 12, 24, 48],
+         'knn__weights': ['uniform','distance'],
+         'knn__p': [1,2]}
+##Plug into the GridSearch
+tuning=GridSearchCV(pipeline, param_grid=params, n_job= -1)
+tuning.fit(X_train_scaled, y_train)
+#give us the best scores
+print("Best hyperparameters found by GridSearchCV:", grid_search.best_params_)
+print("Best cross-validation score from GridSearchCV:", grid_search.best_score_)
+
+##Use the best model from GridSearchCV to predict the test set
+best_model= grid_search.best_estimator_
+y_pred = best_model(X_test_scaled)
+
+##Test is against our prediction
+test_accuracy= accuracy_score(y_test, y_pred)
+print(f"Test Accuracy: {test_accuracy:.4f}"}
