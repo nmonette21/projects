@@ -1,0 +1,82 @@
+# Import required packages
+from sklearn.metrics.pairwise import cosine_similarity
+from sentence_transformers import SentenceTransformer
+import pandas as pd
+from tqdm import tqdm
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Load the data
+
+movies_metadata = pd.read_csv('movies_metadata.csv')
+ratings = pd.read_csv('ratings.csv')
+
+# Start with the 1st recommender we built
+def simple_recommender(movies_metadata, criterion = 'vote_average', top_n = 10):
+        if criterion not in ['vote_average', 'vote_count']:
+            raise ValueError("Criterion must be either 'vote_average' or 'vote_count'")
+        
+    # Sort the movies based on the specified criterion
+    recommended_movies = movies_metadata.sort_values(by = criterion,  ascending = False)
+    
+    #Select top N Movies
+    top_n_movies = recommended_movies[['movie_id','title', 'overview', criterion]].head(top_n)
+    
+    return top_n_movies
+
+def user_input_recommender(movies_metadata, ratings, movie_title, top_n=10):
+
+    #Merge movies_metadata with our ratings
+    movie_ratings =pd.merge(movies_metadata, ratings, on='movie_id')
+
+    #Need to get each movie as its own column, so that we can compare movie scores to one another, so create a pivot table
+    movie_pivot_table = movie_ratings.pivot_table(index='user_id', columns='title', values = 'rating')
+
+    #Fill in any null values with 0
+    movie_pivot_table.fillna(0, inplace= True)
+
+    # Compute cosine similarity matrix (tranposing to get the movies into vectors or rows)
+    movie_similarity = cosine_similarity(movie_pivot_table.T)
+    
+    #Convert the matrix to a DataFrame so we can access it
+    movie_similarity_df = pd.DataFrame(movie_similarity, index = movie_pivot_table.columns, columns= movie_pivot_table.columns)
+
+    # Get the list of similar movies
+    similar_movies = pd.DataFrame(movie_similarity_df[movie_title].sort_values(ascending = False)[1:top_n+1]) # Slicing to 1 because the 1st row will be the movie itself, and n+1 because python slicing is exlcusive
+    return similar_movies
+
+
+#Load a pre-trained model from Sentence Transformers
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+#Ensure the 'overview' column is filled with strings
+movies_metadata['overview'] = movies_metadata['overview'].fillna('').astype(str)
+
+#Generate embbedings for each movie overview
+tqdm.pandas(desc ="Generate embeddings")
+movies_metadata['embedding'] = movies_metadata['overview'].progress_apply(lambda x: model.encode(x).tolist())
+
+def recommend_movies_desc(description, n=5):
+    # Generate user embedding for movie
+    user_embedding = model.encode(description).tolist()
+    
+    #Calculate cosine similarity between user embedding and all movie embeddings
+    movies_metadata['similarity'] = movies_metadata['embedding'].apply(lambda x: cosine_similarity([user_embedding], [x])[0][0])
+    
+    #Sort movies by similarity and get top n recommendations
+    recommendations = movies_metadata.sort_values(by ='similarity', ascending = False).head(n)
+    
+    return recommendations[['title', 'overview', 'similarity']]
+
+
+# Weave these 3 methods of recommending movies into one function
+
+def movie_recommendations(method = 'popularity', criterion = None, user_input= None, top_n=5):
+    if method == 'popularity':
+        return simple_recommender(movies_metadata, criterion = criterion, top_n = top_n)
+    elif method == 'rating_similarity':
+        return user_input_recommender(movies_metadata, ratings, movie_title = user_input, top_n=10)
+    elif method == 'movie_description':
+        return recommend_movies_desc(description, n=5)
+    else:
+        raise ValueError("Method must be one of: popularity, rating_similarity, or movie_description")
