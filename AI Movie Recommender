@@ -11,6 +11,39 @@ import matplotlib.pyplot as plt
 movies_metadata = pd.read_csv('movies_metadata.csv')
 ratings = pd.read_csv('ratings.csv')
 
+# Get an idea of how many unique movies are there
+print(movies_metadata['movie_id'].nunique)
+ 
+# Visualize the vote_average column
+plt.figure(figsize = (10,5))
+plt.hist(movies_metadata['vote_average'].dropna(), bins = 20, edgecolor = 'k' , alpha = .7)
+plt.title('Distribution of Vote Average')
+plt.xlabel('Vote Average')
+plt.ylabel('Frequency')
+plt.grid(True)
+plt.show()
+      
+# Visualize the vote_count column
+plt.figure(figsize = (10,5))
+plt.hist(movies_metadata['vote_count'].dropna(), bins = 20, edgecolor = 'k', alpha = .7)
+plt.title('Distribution of Vote Count')
+plt.xlabel('Vote Count')
+plt.ylabel('Frequency')
+plt.grid('True')
+plt.show()
+
+# Get an idea of how many unique movies are in the ratings file
+print(ratings['movie_id'].nunique)
+
+# Visualize the movie_rating
+plt.figure(figsize = (10,5))
+plt.hist(ratings['rating'].dropna(), bins = 20, edgecolor = 'k', alpha = .7)
+plt.title('Distribution of Movie Id (Ratings File)')
+plt.xlabel('Score of Rating')
+plt.ylabel('Frequency')
+plt.grid(True)
+plt.show()
+
 # Start with the 1st recommender we built
 def simple_recommender(movies_metadata, criterion = 'vote_average', top_n = 10):
         if criterion not in ['vote_average', 'vote_count']:
