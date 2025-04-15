@@ -1,0 +1,157 @@
+# Import plotly and pandas
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Read in the dataset "guest_data_with_reviews.xlsx" and show the first five rows
+file_name='guest_data_with_reviews.xlsx'
+guest_data= pd.read_excel(file_name)
+guest_data.head(5)
+
+# What's the total length of the dataset?
+len(guest_data)
+
+# How would you identify missing values in this dataset?
+missing_values = guest_data.isnull().sum()
+missing_values
+
+# How would you remove the missing values in this dataset?
+# Drop columns that have missing values, then drop rows with missing values, just doing a dropna would drop entire dataset
+guest_data= guest_data.dropna(axis=1)
+guest_data = guest_data.dropna()
+guest_data
+
+# We're interested in the recommendation scores. What is their distribution? 
+guest_data.rename(columns={'How likely are you to recommend us to a friend or colleague?' : 'recommend_score'}, inplace= True)
+plt.figure(figsize = (10,5))
+plt.hist(guest_data['recommend_score'], bins = 10, edgecolor = 'k', alpha =.7)
+plt.xlabel('Actual Score')
+plt.ylabel('Frequency')
+plt.title('Distribution of Recommendation Scores')
+plt.show()
+
+# Classify scores as promoters (9-10), passives (7-8), and detractors (0-6)
+
+# Define Classification method
+def nps_classifier(score):
+    if score >= 9:
+        return 'Promoter'
+    elif score >= 7:
+        return 'Passive'
+    else:
+        return 'Detractor'
+# Apply classification method
+guest_data['NPS_Category']= guest_data['recommend_score'].apply(nps_classifier)
+guest_data
+
+# Calculate the overall NPS and interpret its meaning
+promoters = guest_data[guest_data['NPS_Category'] == 'Promoter'].shape[0]
+passives = guest_data[guest_data['NPS_Category'] == 'Passive'].shape[0]
+detractors = guest_data[guest_data['NPS_Category'] == 'Detractor'].shape[0]
+total_responses = len(guest_data)
+
+nps_score = ((promotors - detractors)/ total_responses) * 100
+
+if nps_score > 50:
+    loyalty = "Excellent"
+elif 50> = nps_score >0:
+    loyalty = "Good"
+elif 0 >= nps_score > -50:
+    loyalty = "Poor"
+
+# Analyze sentiments in the reviews using a pre-trained model
+from transformers import pipeline
+
+# Load the pre-trained model
+sentiment_analyzer = pipeline('sentiment-analysis')
+
+# Analyze sentiments in the reviews
+guest_data['Sentiment'] = guest_data['Review'].apply(lambda review: sentiment_analyzer(review)[0]['label'])
+
+#Display first few rows 
+guest_data[['Review', 'Sentiment']].head(5)
+
+# Visualize sentiment distribution across the dataset
+
+plt.figure(figsize=(10,5))
+plt.hist(guest_data['Sentiment'], bins=2, edgecolor='k', alpha= .7)
+plt.xticks([0, 1], ['NEGATIVE', 'POSITIVE'])
+plt.xlabel("Category of Sentiment")
+plt.ylabel("Frequency")
+plt.title("Distribution of Sentiment Analysis")
+plt.show()
+
+# How would you interpret the sentiment distribution?
+
+# Count the occurences of each sentiment
+senitment_counts = guest_data['Sentiment'].values_counts()
+
+# Get percentage of each sentiment
+sentiment_percentage = senitment_counts / len(guest_data) * 100
+
+# Display sentiments and percentages
+sentiment_counts_df = pd.DataFrame({
+    'Sentiment': sentiment_counts.index,
+    'Count': sentiment_count.values,
+    'percentages' : sentiment_percentage.values
+})
+
+# Display the DF
+sentiment_counts_df
+
+# What are some common keywords in the reviews?
+from sklearn.feature_extraction.text import CountVectorizer
+
+# Extract the reviews from the dataframe
+reviews = guest_data['Review']
+
+# Initialize the CountVectorizer
+vectorizer = CountVectorizer(stop_words='english', max_features = 20)
+
+# Fit & transform the reviews
+X = vectorizer.fit_transform(reviews)
+
+#Grab the word counts
+word_counts = X.toarray().sum(axis=0)
+
+#Get the actual words
+vocab = vectorizer.get_feature_names_out()
+
+#Combine the word counts and words
+word_counts_vocab = pd.DataFrame({
+    'word' : vocab,
+    'Count': word_counts  
+}).sort_values(by= 'Count', ascending = False)
+
+word_counts_vocab
+
+# Extract key topics from the reviews using embeddings
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.decomposition import NMF
+import numpy as np
+
+#Initiate the TfidVectorizer, this will create importance of words
+tfidf_vectorizer  = TfidfVectorizer(stop_words='english', max_features = 1000)
+tfidf = tfidf_vectorizer .fit_transform(reviews)
+
+#Initialize the NMF model
+nmf_model = NMF(n_components = 5, random_state =42)
+
+# Fit the NMF model, this will create the topics
+nmf_model_fitted = nmf_model.fit(tfidf)
+
+# Grab the topics
+topics = nmf_model_fitted.components_
+
+# Grab the feature names (words)
+feature_names = tfidf_vectorizer.get_feature_names_out()
+
+#Display the top words for each topic
+num_top_words = 10
+topics_df = pd.DataFrame()
+
+for topic_idx, topic in enumerate(topics):
+    top_words = [feature_names[i] for i in topic.argsort()[:: -1][:num_top_words]]
+    topics_df[f'Topic {topic_idx+1}'] = top_words
+              
+topics_df
