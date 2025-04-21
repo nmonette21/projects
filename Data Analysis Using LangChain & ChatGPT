@@ -1,0 +1,172 @@
+# Load required packages (Google Colab Notebook)
+!pip install openai
+!pip install langchain==0.0.300
+!pip install --force-reinstall --no-cache-dir typing_extensions==4.10.0
+
+import os
+import openai
+import io
+import langchain as lc
+from langchain.chat_models import ChatOpenAI
+from langchain.schema import AIMessage, HumanMessage, SystemMessage
+import plotly.express as px
+from IPython.display import display, Markdown
+
+# Load our data
+import pandas as pd
+from google.colab import files
+uploaded = {}
+uploaded.clear()
+uploaded = files.upload()
+
+# Get the actual filename from the uploaded dictionary
+uploaded_filename = list(uploaded.keys())[0]  # Assuming only one file is uploaded
+
+# Use the correct filename to read the CSV
+electric_cars_df = pd.read_csv(io.BytesIO(uploaded[uploaded_filename]))
+uploaded.clear()
+electric_cars_df.head()
+
+from google.colab import userdata
+import openai
+
+# Retrieve the secret API key
+OPEN_AI_KEY = userdata.get('OPEN_AI')
+
+# Set the OpenAI API key
+openai.api_key = OPEN_AI_KEY
+
+# Summary Stats
+
+#Display numerical column info
+display(electric_cars_df.describe())
+
+# Display categorical info on columns
+display(electric_cars_df.describe(include='O'))
+
+# Display entire dataset
+display(electric_cars_df)
+
+# Define the system message. Assign to system_msg_test.
+
+system_msg_txt = """You are a helpful assistant who understands data science.
+ You write in a clear language that a ten year old can understand.
+ You keep your answers brief."""
+
+# Define the user message. Assign to user_msg_test.
+usr_msg_test = "Tell me some uses of GPT for data analysis."
+
+# Create a message list from the system and user messages. Assign to msgs_test.
+msgs_test = [
+    {"role": "system", "content": system_msg_txt},
+    {"role": "user", "content": usr_msg_test}
+             ]
+
+# Use the openai pacakge to define an OpenAI client. Assign to client.
+rsps_test = openai.ChatCompletion.create(
+    model = 'gpt-3.5-turbo',
+    messages = msgs_test
+)
+
+# Look at the response
+print(rsps_test)
+print(rsps_test.choices[0].message.content)
+
+# Using LangChain
+dataset_description = """
+You have a dataset about electric cars registered in Washington state, USA in 2020. It is available as a pandas DataFrame named `electric_cars`.
+
+Each row in the dataset represents the count of the number of cars registered within a city, for a particular model.
+
+The dataset contains the following columns.
+
+- `city` (character): The city in which the registered owner resides.
+- `county` (character): The county in which the registered owner resides.
+- `model_year` (integer): The [model year](https://en.wikipedia.org/wiki/Model_year#United_States_and_Canada) of the car.
+- `make` (character): The manufacturer of the car.
+- `model` (character): The model of the car.
+- `electric_vehicle_type` (character): Either "Plug-in Hybrid Electric Vehicle (PHEV)" or "Battery Electric Vehicle (BEV)".
+- `n_cars` (integer): The count of the number of vehicles registered.
+"""
+
+# Create a task for the AI. Assign to suggest_questions.
+suggest_questions = "Suggest some data analysis questions that could be answered with this dataset."
+
+# Concatenate the dataset description and the request. Assign to msgs_suggest_questions.
+msgs_suggest_questions  = [
+   SystemMessage(content = "You are a data analysis expert"),
+   HumanMessage(content = f"{dataset_description}\n\n{suggest_questions}")
+]
+
+# Create a ChatOpenAI object.  Assign to chat
+chat = ChatOpenAI(openai_api_key=OPEN_AI_KEY)
+
+# Pass your message to GPT. Assign to rsps_suggest_questions.
+rsps_suggest_questions = chat.invoke(msgs_suggest_questions)
+
+# Print the response
+print("The whole response\n")
+print(rsps_suggest_questions)
+
+print("\n----\n")
+
+# Print just the response's content
+print("Just the response's content\n")
+print(rsps_suggest_questions.content)
+
+print("\n----\n")
+
+# Print the type of the response
+print("The type of the response\n")
+print(type(rsps_suggest_questions))
+
+# Append the response and a new message to the previous messages. 
+# Assign to msgs_python_top_models.
+msgs_python_top_models = msgs_suggest_questions + [
+    rsps_suggest_questions, 
+    HumanMessage(content = 'Write Python code to find the top make/model combinations of electric car in Washington state.')
+]
+
+# Pass your message to GPT. Assign to rsps_python_top_models.
+rsps_python_top_models = chat(msgs_python_top_models)
+
+# Display the response's Markdown content
+display(Markdown(rsps_python_top_models.content))
+
+# Paste the code that was produced and run it
+
+# Group the data by make and model, and sum the number of cars registered for each combination
+top_make_model = electric_cars_df.groupby(['make', 'model'])['n_cars'].sum().reset_index()
+
+# Sort the data in descending order based on the number of cars registered
+top_make_model = top_make_model.sort_values(by='n_cars', ascending=False)
+
+# Display the top make/model combinations
+top_make_model.head()
+
+# Create a new OpenAI chat object with temperature set to zero. Assign to chat0.
+chat0 = ChatOpenAI(temperature=0, openai_api_key=OPEN_AI_KEY)
+
+# Ask GPT for code for a bar plot, as detailed in the instructions
+
+msgs_python_plot = msgs_python_top_models +  [
+    rsps_python_top_models,
+    HumanMessage(content = 'Write some Python code to draw a bar plot of the total count of electric cars by model year, with bars colored by electric vehicle type.  Use the plotly package')
+]
+
+rsps_python_plot = chat0(msgs_python_plot)
+display(Markdown(rsps_python_plot.content))
+
+import plotly.express as px
+
+# Group the data by model year and electric vehicle type, and sum the number of cars registered for each combination
+grouped_data = electric_cars_df.groupby(['model_year', 'electric_vehicle_type'])['n_cars'].sum().reset_index()
+
+# Create a bar plot using Plotly
+fig = px.bar(grouped_data, x='model_year', y='n_cars', color='electric_vehicle_type',
+             labels={'model_year': 'Model Year', 'n_cars': 'Total Count of Electric Cars'},
+             title='Total Count of Electric Cars by Model Year',
+             barmode='group')
+
+# Show the plot
+fig.show()
