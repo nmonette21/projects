@@ -1,0 +1,111 @@
+# Import necessary packages
+!pip install evaluate
+import pandas as pd
+import torch
+import evaluate
+from transformers import logging
+import csv
+logging.set_verbosity(logging.WARNING)
+
+# Step 1: Install necessary packages (if not already installed)
+!pip install pandas
+
+# Step 2: Import required libraries
+import pandas as pd
+import io
+from google.colab import files
+
+# Step 3: Upload CSV file
+print("Please upload your CSV file:")
+uploaded = files.upload()
+
+# Step 4: Extract filename from uploaded dictionary
+uploaded_filename = list(uploaded.keys())[0]
+
+# Step 5: Read CSV into DataFrame with error handling
+try:
+    car_reviews_df = pd.read_csv(io.BytesIO(uploaded[uploaded_filename]), delimiter=";", on_bad_lines='skip', engine='python')
+    print("CSV loaded successfully. Here's a preview:")
+    display(car_reviews_df.head())
+except Exception as e:
+    print("Error reading the CSV:", e)
+
+#Separate reviews and labels
+reviews = car_reviews_df['Review'].tolist()
+labels = car_reviews_df['Class'].tolist()
+
+# Load LLM into a pipeline
+from transformers import pipeline
+import os
+HF_TOKEN = "xxx"
+os.environ["HF_TOKEN"] = HF_TOKEN
+
+classifier = pipeline('sentiment-analysis', model='distilbert-base-uncased-finetuned-sst-2-english')
+
+
+# Predicting the reviews
+
+predicted_label = classifier(reviews)
+for review, label, predicted in zip(reviews, labels, predicted_label):
+  print(f"User review: {review}\n Actual label: {label}\n Predicted label: {predicted_label}")
+
+labels_numeric = [1 if real_label == 'POSITIVE' else 0 for real_label in labels]
+predicted_labels_numeric = [1 if predicted_label == 'POSITIVE' else 0 for pred in predicted_label]
+
+
+# Load our accuracy metrics 
+accuracy = evaluate.load("accuracy")
+f1 = evaluate.load("f1")
+
+# Compute the evaluation metrics
+print(accuracy.compute(references =labels_numeric, predictions = predicted_labels_numeric))
+print(f1.compute(references = labels_numeric, predictions =predicted_labels_numeric))
+
+# Load the translation reviews
+
+# Upload CSV file
+print("Please upload your CSV file:")
+uploaded = files.upload()
+
+# Extract filename from uploaded dictionary
+uploaded_filename_2 = list(uploaded.keys())[0]
+
+
+#  Uploading the actual file
+with open(uploaded_filename_2, 'r') as file:
+  lines = file.readlines()
+references = [line.strip() for line in lines]
+
+
+# Grab the first review and tranlate it to Spanish
+first_review = reviews[0]
+translator = pipeline("translation_en_to_es", model = "Helsinki-NLP/opus-mt-en-es")
+translated_review = translator(first_review, max_length = 30)[0]['translation_text']
+print(translated_review)
+
+ # Get Bleu score gor that
+bleu_score = evaluate.load("bleu")
+results_bleu = bleu_score.compute(predictions = [translated_review], references = [references])
+print(results_bleu['bleu'])
+
+# Extractive QA
+
+from transformers import AutoTokenizer
+from transformers import AutoModelForQuestionAnswering
+
+#Instantiate model & tokenizer
+model = "deepset/minilm-uncased-squad2"
+
+#Define context & question, and tokenize both
+context = reviews[1]
+question = "What did he like about he brand?"
+qa = pipeline('question-answering', model=model)
+result = qa(question = question, context = context)
+print("Model response:", result['answer'])
+
+# Summarize a review 
+last_review = reviews[-1]
+summarize = pipeline("summarization", model ="cnicu/t5-small-booksum")
+summary = summarize(last_review)
+# print(summary['summary_text'])
+print(summary[0]['summary_text'])
